@@ -170,3 +170,71 @@ app.post('/reviews', async (req, res) => {
         console.error('Error in adding new review', error.message);
     }
 });
+
+// 9. Adding favorite movies for users
+app.post('/favorites', async (req, res) => {
+    const { user_id, movie_id } = req.body;
+
+    try {
+        // Check if the movie and user exist
+        const movieResult = await client.query('SELECT * FROM movies WHERE movie_id = $1', [movie_id]);
+        const userResult = await client.query('SELECT * FROM users WHERE user_id = $1', [user_id]);
+
+        if (movieResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Movie not found' });
+        }
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Add the movie to the user's favorites
+        const result = await client.query(
+            'INSERT INTO favorites (user_id, movie_id) VALUES ($1, $2) RETURNING *', 
+            [user_id, movie_id]
+        );
+
+        res.status(201).json({
+            message: 'Movie added to favorites successfully!',
+            favorite: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error in adding favorite movies for users:', error.message);
+    }
+});
+
+// 10. Getting favorite movies by username
+app.get('/favorites/:username', async (req, res) => {
+    const { username } = req.params;
+
+    try {
+        // Get user by username
+        const userResult = await client.query('SELECT * FROM users WHERE username = $1', [username]);
+
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user_id = userResult.rows[0].user_id;
+
+        // Get the favorite movies of the user
+        const favoritesResult = await client.query(
+            'SELECT m.movie_id, m.movie_name, m.movie_year, g.movie_genre ' +
+            'FROM favorites f ' +
+            'JOIN movies m ON f.movie_id = m.movie_id ' +
+            'JOIN genres g ON m.genre_id = g.genre_id ' +
+            'WHERE f.user_id = $1',
+            [user_id]
+        );
+
+        if (favoritesResult.rows.length === 0) {
+            return res.status(404).json({ message: 'No favorite movies found for this user' });
+        }
+
+        res.json({
+            message: 'Favorite movies fetched successfully!',
+            favorites: favoritesResult.rows
+        });
+    } catch (error) {
+        console.error('Error in getting favorite movies by username:', error.message);
+    }
+});
